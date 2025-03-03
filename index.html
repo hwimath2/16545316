@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>한 자리+한 자리=두 자리</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #fff8dc;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+        #start-screen, #game-screen, #end-screen {
+            display: none;
+            padding: 20px;
+        }
+        #start-screen.visible, #game-screen.visible, #end-screen.visible {
+            display: block;
+        }
+        h1 {
+            color: #ff8c00;
+            margin-bottom: 10px;
+        }
+        h2 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .button {
+            padding: 15px 25px;
+            font-size: 18px;
+            margin: 10px;
+            cursor: pointer;
+            border: none;
+            border-radius: 8px;
+            background-color: #ffa500;
+            color: white;
+            transition: background-color 0.3s;
+        }
+        .button:hover {
+            background-color: #ff7f50;
+        }
+        #stats {
+            margin-top: 20px;
+            font-size: 18px;
+        }
+        #message {
+            font-size: 22px;
+            color: #dc143c;
+            margin-top: 20px;
+            min-height: 30px;
+        }
+        .question-container {
+            margin: 20px 0;
+            text-align: center;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+        .question {
+            font-size: 36px;
+            margin-bottom: 20px;
+        }
+        .options {
+            list-style-type: none;
+            padding: 0;
+        }
+        .options li {
+            margin: 10px 0;
+        }
+        .option-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            cursor: pointer;
+            border: 2px solid #ffa500;
+            border-radius: 8px;
+            background-color: white;
+            transition: background-color 0.3s, color 0.3s;
+            width: 200px;
+        }
+        .option-button:hover {
+            background-color: #ffa500;
+            color: white;
+        }
+        .option-button.correct {
+            background-color: #32cd32;
+            color: white;
+            border-color: #32cd32;
+        }
+        .option-button.incorrect {
+            background-color: #ff6347;
+            color: white;
+            border-color: #ff6347;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 시작 화면 -->
+    <div id="start-screen" class="visible">
+        <h1>한 자리+한 자리=두 자리</h1>
+        <h2>난이도를 선택하세요</h2>
+        <!-- 이름 입력 필드 추가 -->
+        <input type="text" id="player-name" placeholder="이름을 입력하세요" />
+        <br/><br/>
+        <button class="button" onclick="startGame('easy')">쉬움</button>
+        <button class="button" onclick="startGame('normal')">보통</button>
+        <button class="button" onclick="startGame('hard')">어려움</button>
+    </div>
+
+    <!-- 게임 화면 -->
+    <div id="game-screen">
+        <h1>한 자리+한 자리=두 자리</h1>
+        <div id="question-container">
+            <!-- 문제 영역 -->
+        </div>
+        <div id="message"></div>
+        <div id="stats">
+            <p>점수: <span id="score">0</span></p>
+            <p>남은 시간: <span id="timer">0</span>초</p>
+            <p>남은 기회: <span id="lives">3</span></p>
+            <p>진행 상황: <span id="progress">1</span> / 50</p>
+        </div>
+    </div>
+
+    <!-- 종료 화면 -->
+    <div id="end-screen">
+        <h1>게임 종료!</h1>
+        <p>최종 점수: <span id="final-score">0</span></p>
+        <p>경과시간: <span id="elapsed-time">0</span>초</p>
+        <button class="button" onclick="restartGame()">다시 시작</button>
+        <button class="button" onclick="sendData()">전송하기</button>
+        <pre id="response"></pre>
+    </div>
+
+    <script>
+        // 전역 변수
+        let playerName = "";
+        let gameStartTime;
+
+        window.onload = function() {
+            // 난이도별 설정
+            const difficultySettings = {
+                'easy': { timePerQuestion: null, points: 5 },
+                'normal': { timePerQuestion: 20, points: 10 },
+                'hard': { timePerQuestion: 10, points: 15 }
+            };
+            let difficulty;
+            let timeLimit;
+            let score = 0;
+            let currentQuestionIndex = 0;
+            let shuffledQuestions = [];
+            let timerInterval;
+            let remainingTime;
+            let lives = 3;
+
+            // 문제 목록 (총 50개)
+            const problems = [
+                { question: "4 + 7 = ?", options: ["11", "12", "10", "9"], correctAnswer: "11" },
+                { question: "5 + 6 = ?", options: ["11", "10", "12", "9"], correctAnswer: "11" },
+                { question: "3 + 9 = ?", options: ["12", "11", "10", "13"], correctAnswer: "12" },
+                { question: "4 + 8 = ?", options: ["12", "11", "10", "13"], correctAnswer: "12" },
+                { question: "5 + 7 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "6 + 5 = ?", options: ["11", "12", "10", "13"], correctAnswer: "11" },
+                { question: "7 + 4 = ?", options: ["11", "12", "10", "13"], correctAnswer: "11" },
+                { question: "8 + 3 = ?", options: ["11", "12", "10", "13"], correctAnswer: "11" },
+                { question: "9 + 2 = ?", options: ["11", "12", "10", "13"], correctAnswer: "11" },
+                { question: "6 + 6 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "7 + 5 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "8 + 4 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "9 + 3 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "7 + 6 = ?", options: ["13", "12", "11", "14"], correctAnswer: "13" },
+                { question: "8 + 5 = ?", options: ["13", "12", "11", "14"], correctAnswer: "13" },
+                { question: "9 + 4 = ?", options: ["13", "12", "11", "14"], correctAnswer: "13" },
+                { question: "6 + 7 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "5 + 8 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "4 + 9 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "7 + 7 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "8 + 6 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "9 + 5 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "6 + 8 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "5 + 9 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "8 + 7 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "9 + 6 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "7 + 8 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "6 + 9 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "9 + 7 = ?", options: ["16", "15", "14", "17"], correctAnswer: "16" },
+                { question: "8 + 8 = ?", options: ["16", "15", "14", "17"], correctAnswer: "16" },
+                { question: "7 + 9 = ?", options: ["16", "15", "14", "17"], correctAnswer: "16" },
+                { question: "8 + 9 = ?", options: ["17", "16", "15", "18"], correctAnswer: "17" },
+                { question: "9 + 8 = ?", options: ["17", "16", "15", "18"], correctAnswer: "17" },
+                { question: "9 + 9 = ?", options: ["18", "17", "16", "19"], correctAnswer: "18" },
+                { question: "5 + 6 = ?", options: ["11", "12", "10", "13"], correctAnswer: "11" },
+                { question: "4 + 9 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "3 + 8 = ?", options: ["11", "12", "10", "9"], correctAnswer: "11" },
+                { question: "2 + 9 = ?", options: ["11", "12", "10", "9"], correctAnswer: "11" },
+                { question: "5 + 8 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "6 + 7 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "4 + 8 = ?", options: ["12", "11", "10", "13"], correctAnswer: "12" },
+                { question: "5 + 7 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "3 + 9 = ?", options: ["12", "11", "10", "13"], correctAnswer: "12" },
+                { question: "6 + 9 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "7 + 6 = ?", options: ["13", "12", "14", "11"], correctAnswer: "13" },
+                { question: "8 + 5 = ?", options: ["13", "12", "11", "14"], correctAnswer: "13" },
+                { question: "9 + 4 = ?", options: ["13", "12", "11", "14"], correctAnswer: "13" },
+                { question: "6 + 6 = ?", options: ["12", "11", "13", "10"], correctAnswer: "12" },
+                { question: "5 + 9 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "8 + 6 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" },
+                { question: "7 + 8 = ?", options: ["15", "14", "13", "16"], correctAnswer: "15" },
+                { question: "9 + 5 = ?", options: ["14", "13", "12", "15"], correctAnswer: "14" }
+            ];
+
+            // 게임 시작 함수
+            window.startGame = function(selectedDifficulty) {
+                // 이름 입력값 가져오기
+                playerName = document.getElementById('player-name').value.trim();
+                if (!playerName) {
+                    alert("이름을 입력하세요!");
+                    return;
+                }
+                difficulty = selectedDifficulty;
+                timeLimit = difficultySettings[difficulty].timePerQuestion;
+                document.getElementById('start-screen').classList.remove('visible');
+                document.getElementById('game-screen').classList.add('visible');
+                score = 0;
+                lives = 3;
+                currentQuestionIndex = 0;
+                shuffledQuestions = shuffleArray([...problems]);
+                gameStartTime = Date.now(); // 게임 시작 시간 기록
+                updateStats();
+                renderQuestion();
+            }
+
+            // 배열 섞기 함수
+            function shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    let j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+                return array;
+            }
+
+            // 현재 문제 렌더링 함수
+            function renderQuestion() {
+                if (currentQuestionIndex >= shuffledQuestions.length || lives <= 0) {
+                    endGame();
+                    return;
+                }
+                const container = document.getElementById('question-container');
+                container.innerHTML = '';
+                // 기존의 "다음 문제" 버튼 제거
+                const nextButton = document.getElementById('next-button');
+                if(nextButton) nextButton.remove();
+
+                const currentQuestion = shuffledQuestions[currentQuestionIndex];
+
+                // 옵션 섞기
+                let options = shuffleArray([...currentQuestion.options]);
+                let correctAnswerIndex = options.indexOf(currentQuestion.correctAnswer);
+                currentQuestion.answerIndex = correctAnswerIndex;
+
+                const div = document.createElement('div');
+                div.className = 'question-container';
+                div.innerHTML = `
+                    <div class="question">${currentQuestion.question}</div>
+                    <ul class="options">
+                        ${options.map((option, index) => `<li><button class="option-button" data-option-index="${index}">${option}</button></li>`).join('')}
+                    </ul>
+                `;
+                container.appendChild(div);
+                const optionButtons = document.querySelectorAll('.option-button');
+                optionButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        const selectedOptionIndex = parseInt(this.getAttribute('data-option-index'));
+                        checkAnswer(selectedOptionIndex);
+                    });
+                });
+                document.getElementById('message').innerHTML = '';
+
+                // 타이머 설정 (제한시간이 있을 경우)
+                if (timeLimit !== null) {
+                    remainingTime = timeLimit;
+                    document.getElementById('timer').innerText = remainingTime;
+                    clearInterval(timerInterval);
+                    timerInterval = setInterval(() => {
+                        remainingTime--;
+                        document.getElementById('timer').innerText = remainingTime;
+                        if (remainingTime <= 0) {
+                            clearInterval(timerInterval);
+                            checkAnswer(-1); // 시간 초과: 오답 처리
+                        }
+                    }, 1000);
+                } else {
+                    document.getElementById('timer').innerText = '무제한';
+                }
+            }
+
+            // 답안 확인 함수
+            window.checkAnswer = function(selectedOptionIndex) {
+                clearInterval(timerInterval);
+                const currentQuestion = shuffledQuestions[currentQuestionIndex];
+                let isCorrect = false;
+                let correctAnswerIndex = currentQuestion.answerIndex;
+
+                if (selectedOptionIndex === correctAnswerIndex) {
+                    isCorrect = true;
+                    score += difficultySettings[difficulty].points;
+                    document.getElementById('message').innerHTML = '정답입니다! 🎉';
+                } else {
+                    lives--;
+                    document.getElementById('message').innerHTML = `틀렸습니다! 정답은 ${currentQuestion.correctAnswer} 입니다. 😢`;
+                    if (lives <= 0) {
+                        endGame();
+                        return;
+                    }
+                }
+
+                updateStats();
+                highlightOptions(selectedOptionIndex, correctAnswerIndex);
+                disableOptions();
+
+                // 자동으로 넘어가지 않고 "다음 문제" 버튼을 추가함
+                if (currentQuestionIndex < shuffledQuestions.length - 1 && lives > 0) {
+                    let nextButton = document.createElement('button');
+                    nextButton.className = "button";
+                    nextButton.id = "next-button";
+                    nextButton.innerText = "다음 문제";
+                    nextButton.addEventListener('click', function() {
+                        nextButton.remove();
+                        currentQuestionIndex++;
+                        renderQuestion();
+                    });
+                    document.getElementById('game-screen').appendChild(nextButton);
+                } else {
+                    // 마지막 문제인 경우 잠시 후 종료
+                    setTimeout(endGame, 2000);
+                }
+            }
+
+            // 옵션 강조 표시 함수
+            function highlightOptions(selectedOptionIndex, correctAnswerIndex) {
+                const buttons = document.querySelectorAll('.option-button');
+                buttons.forEach((button, index) => {
+                    if (index === correctAnswerIndex) {
+                        button.classList.add('correct');
+                    }
+                    if (index === selectedOptionIndex && selectedOptionIndex !== correctAnswerIndex) {
+                        button.classList.add('incorrect');
+                    }
+                });
+            }
+
+            // 옵션 비활성화 함수
+            function disableOptions() {
+                const buttons = document.querySelectorAll('.option-button');
+                buttons.forEach(button => {
+                    button.disabled = true;
+                });
+            }
+
+            // 통계 업데이트 함수
+            function updateStats() {
+                document.getElementById('score').innerText = score;
+                document.getElementById('progress').innerText = currentQuestionIndex + 1;
+                document.getElementById('lives').innerText = lives;
+            }
+
+            // 게임 종료 함수
+            function endGame() {
+                clearInterval(timerInterval);
+                document.getElementById('game-screen').classList.remove('visible');
+                document.getElementById('end-screen').classList.add('visible');
+                document.getElementById('final-score').innerText = score;
+                const elapsedTime = Math.floor((Date.now() - gameStartTime) / 1000);
+                document.getElementById('elapsed-time').innerText = elapsedTime;
+            }
+
+            // 게임 재시작 함수
+            window.restartGame = function() {
+                document.getElementById('end-screen').classList.remove('visible');
+                document.getElementById('start-screen').classList.add('visible');
+            }
+        };
+
+        // 서버 데이터 전송 함수
+        async function saveData(game, name, score, elapsedTime) {
+            const FUNCTION_URL = "https://us-central1-record-f420d.cloudfunctions.net/report";
+
+            const requestData = {
+                game,
+                name,
+                score: parseInt(score, 10),
+                elapsedTime: parseInt(elapsedTime, 10)
+            };
+
+            try {
+                const response = await fetch(FUNCTION_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                const responseData = await response.json();
+
+                if (response.ok) {
+                    document.getElementById('response').innerText =
+                        `성공: ${JSON.stringify(responseData, null, 2)}`;
+                } else {
+                    document.getElementById('response').innerText =
+                        `오류: ${JSON.stringify(responseData, null, 2)}`;
+                }
+            } catch (error) {
+                console.error('요청 실패:', error);
+                document.getElementById('response').innerText =
+                    `네트워크 오류: ${error.message}`;
+            }
+        }
+
+        function sendData() {
+            const finalScore = document.getElementById('final-score').innerText;
+            const elapsedTime = document.getElementById('elapsed-time').innerText;
+            saveData("한 자리+한 자리=두 자리", playerName, finalScore, elapsedTime);
+        }
+    </script>
+</body>
+</html>
